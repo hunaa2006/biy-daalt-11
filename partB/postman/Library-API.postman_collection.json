@@ -1,0 +1,638 @@
+{
+  "info": {
+    "_postman_id": "library-api-hw11",
+    "name": "Library-API",
+    "description": "F.CS311 HW11 — Library Lending API тест цуглуулга\n\nЭнэ collection дараах зүйлсийг тестлэнэ:\n- Эерэг тест (2xx): login, номнэмэх, зээл авах, буцаах, хайх, pagination\n- Сөрөг тест (4xx): 401/403/404/409/422 хариунууд\n- Урсгалтай тест: login → token хадгалах → /loans ашиглах\n- Environment хувьсагч ашиглах",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "lastBookId", "value": "", "type": "string" },
+    { "key": "lastLoanId", "value": "", "type": "string" },
+    { "key": "memberLoanId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 — Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Status is ok', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});",
+              "pm.test('Response time < 500ms', function () {",
+              "  pm.expect(pm.response.responseTime).to.be.below(500);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      }
+    },
+    {
+      "name": "02 — Login (Admin) — Token хадгалах",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('accessToken байгаа эсэх', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json).to.have.property('accessToken');",
+              "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "  // Token болон userId-г environment-д хадгалах (урсгалтай тест)",
+              "  pm.environment.set('token', json.accessToken);",
+              "  pm.environment.set('userId', json.userId);",
+              "});",
+              "pm.test('Role admin байгаа эсэх', function () {",
+              "  pm.expect(pm.response.json().role).to.eql('admin');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@library.mn\",\n  \"password\": \"admin123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "03 — Login (Буруу нууц үг) — 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 401', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "pm.test('Content-Type application/problem+json', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "});",
+              "pm.test('RFC 7807 Problem Details бүтэц', function () {",
+              "  const problem = pm.response.json();",
+              "  pm.expect(problem).to.include.keys(['type', 'title', 'status']);",
+              "  pm.expect(problem.status).to.eql(401);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@library.mn\",\n  \"password\": \"wrongpassword\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "04 — Token байхгүй үед /books хандах — 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 401', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "pm.test('Problem+json хариу', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  const p = pm.response.json();",
+              "  pm.expect(p.status).to.eql(401);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/books", "host": ["{{baseUrl}}"], "path": ["books"] }
+      }
+    },
+    {
+      "name": "05 — Ном жагсаах — Pagination тест",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Pagination талбарууд байгаа эсэх', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json).to.have.all.keys(['data', 'page', 'limit', 'total', 'totalPages']);",
+              "  pm.expect(json.data).to.be.an('array');",
+              "  pm.expect(json.page).to.eql(1);",
+              "  pm.expect(json.limit).to.eql(2);",
+              "});",
+              "pm.test('Хуудас тоо зөв тооцоологдсон', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.totalPages).to.be.at.least(1);",
+              "  pm.expect(json.data.length).to.be.at.most(2);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/books?page=1&limit=2",
+          "host": ["{{baseUrl}}"],
+          "path": ["books"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "2" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "06 — Ном хайх — Filtering тест",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Зөвхөн Technology жанрын номнууд', function () {",
+              "  const json = pm.response.json();",
+              "  json.data.forEach(function (book) {",
+              "    pm.expect(book.genre.toLowerCase()).to.eql('technology');",
+              "  });",
+              "});",
+              "pm.test('Хариу хугацаа < 500ms', function () {",
+              "  pm.expect(pm.response.responseTime).to.be.below(500);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/books?genre=Technology&sort=title&order=asc",
+          "host": ["{{baseUrl}}"],
+          "path": ["books"],
+          "query": [
+            { "key": "genre", "value": "Technology" },
+            { "key": "sort", "value": "title" },
+            { "key": "order", "value": "asc" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "07 — Шинэ ном нэмэх (Admin) — 201",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "pm.test('Ном үүсгэгдсэн, id болон title байгаа', function () {",
+              "  const book = pm.response.json();",
+              "  pm.expect(book).to.have.property('id');",
+              "  pm.expect(book.title).to.be.a('string').and.not.empty;",
+              "  pm.expect(book.availableCopies).to.be.at.least(1);",
+              "  // Дараагийн тестэнд ашиглах үүднээс id-г хадгалах",
+              "  pm.collectionVariables.set('lastBookId', book.id);",
+              "});",
+              "pm.test('ISBN зөв хадгалагдсан', function () {",
+              "  pm.expect(pm.response.json().isbn).to.eql('978-0000000001');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test Book for HW11\",\n  \"author\": \"Test Author\",\n  \"isbn\": \"978-0000000001\",\n  \"genre\": \"Technology\",\n  \"totalCopies\": 2\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/books", "host": ["{{baseUrl}}"], "path": ["books"] }
+      }
+    },
+    {
+      "name": "08 — Давхар ISBN — 409 Conflict",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 409 Conflict', function () {",
+              "  pm.response.to.have.status(409);",
+              "});",
+              "pm.test('RFC 7807 Problem Details', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  const p = pm.response.json();",
+              "  pm.expect(p).to.include.keys(['type', 'title', 'status', 'detail']);",
+              "  pm.expect(p.status).to.eql(409);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Duplicate ISBN Book\",\n  \"author\": \"Someone\",\n  \"isbn\": \"978-0000000001\",\n  \"genre\": \"Technology\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/books", "host": ["{{baseUrl}}"], "path": ["books"] }
+      }
+    },
+    {
+      "name": "09 — Байхгүй ном авах — 404",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 404 Not Found', function () {",
+              "  pm.response.to.have.status(404);",
+              "});",
+              "pm.test('Returns problem+json on 404', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  const problem = pm.response.json();",
+              "  pm.expect(problem).to.include.keys(['type', 'title', 'status']);",
+              "  pm.expect(problem.status).to.eql(404);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/books/nonexistent-id-xyz", "host": ["{{baseUrl}}"], "path": ["books", "nonexistent-id-xyz"] }
+      }
+    },
+    {
+      "name": "10 — Member login — Token хадгалах (Урсгалтай тест 1/3)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Member token авах', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.accessToken).to.be.a('string');",
+              "  // Member token-г тусдаа хувьсагчид хадгалах",
+              "  pm.environment.set('memberToken', json.accessToken);",
+              "  pm.environment.set('memberId', json.userId);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"bat@library.mn\",\n  \"password\": \"pass123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      }
+    },
+    {
+      "name": "11 — Ном зээлэх — 201 (Урсгалтай тест 2/3)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "pm.test('Зээлийн мэдээлэл зөв', function () {",
+              "  const loan = pm.response.json();",
+              "  pm.expect(loan).to.have.property('id');",
+              "  pm.expect(loan.status).to.eql('active');",
+              "  pm.expect(loan.extended).to.eql(false);",
+              "  pm.expect(loan.extensionCount).to.eql(0);",
+              "  // Дараагийн буцаах тестэнд ашиглах",
+              "  pm.environment.set('memberLoanId', loan.id);",
+              "  pm.collectionVariables.set('lastLoanId', loan.id);",
+              "});",
+              "pm.test('DueDate 14 хоногийн дараа байх', function () {",
+              "  const loan = pm.response.json();",
+              "  const due = new Date(loan.dueDate);",
+              "  const now = new Date();",
+              "  const diffDays = (due - now) / (1000 * 60 * 60 * 24);",
+              "  pm.expect(diffDays).to.be.within(13, 15);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookId\": \"b1\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/loans", "host": ["{{baseUrl}}"], "path": ["loans"] }
+      }
+    },
+    {
+      "name": "12 — Зээлийн жагсаалт харах — /loans token ашиглах (Урсгалтай тест 3/3)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Зээлийн жагсаалт pagination-тай', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json).to.have.property('data');",
+              "  pm.expect(json.data).to.be.an('array');",
+              "  pm.expect(json.total).to.be.at.least(1);",
+              "});",
+              "pm.test('Зөвхөн өөрийн зээлүүд харагдах', function () {",
+              "  const json = pm.response.json();",
+              "  const memberId = pm.environment.get('memberId');",
+              "  json.data.forEach(function (loan) {",
+              "    pm.expect(loan.memberId).to.eql(memberId);",
+              "  });",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": { "raw": "{{baseUrl}}/loans?status=active", "host": ["{{baseUrl}}"], "path": ["loans"], "query": [{ "key": "status", "value": "active" }] }
+      }
+    },
+    {
+      "name": "13 — Зээлийг сунгах — 200",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Extended болсон, extensionCount = 1', function () {",
+              "  const loan = pm.response.json();",
+              "  pm.expect(loan.extended).to.eql(true);",
+              "  pm.expect(loan.extensionCount).to.eql(1);",
+              "});",
+              "pm.test('DueDate нэмэгдсэн', function () {",
+              "  const loan = pm.response.json();",
+              "  const due = new Date(loan.dueDate);",
+              "  const now = new Date();",
+              "  const diffDays = (due - now) / (1000 * 60 * 60 * 24);",
+              "  pm.expect(diffDays).to.be.within(26, 29);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": { "raw": "{{baseUrl}}/loans/{{memberLoanId}}/extend", "host": ["{{baseUrl}}"], "path": ["loans", "{{memberLoanId}}", "extend"] }
+      }
+    },
+    {
+      "name": "14 — Хоёр дахь удаа сунгах — 422",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 422 Unprocessable Entity', function () {",
+              "  pm.response.to.have.status(422);",
+              "});",
+              "pm.test('RFC 7807 Problem Details — extension limit', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  const p = pm.response.json();",
+              "  pm.expect(p.status).to.eql(422);",
+              "  pm.expect(p).to.have.property('detail');",
+              "  pm.expect(p.extensionCount).to.eql(1);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": { "raw": "{{baseUrl}}/loans/{{memberLoanId}}/extend", "host": ["{{baseUrl}}"], "path": ["loans", "{{memberLoanId}}", "extend"] }
+      }
+    },
+    {
+      "name": "15 — Ном буцаах — 200",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Зээлийн төлөв returned болсон', function () {",
+              "  const loan = pm.response.json();",
+              "  pm.expect(loan.status).to.eql('returned');",
+              "  pm.expect(loan.returnedAt).to.be.a('string').and.not.empty;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": { "raw": "{{baseUrl}}/loans/{{memberLoanId}}/return", "host": ["{{baseUrl}}"], "path": ["loans", "{{memberLoanId}}", "return"] }
+      }
+    },
+    {
+      "name": "16 — 5-аас дээш ном зээлэх оролдлого — 422",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// 5 зээл хийхийн тулд b2, b3, b4, b5, b6 номнуудыг зээлнэ",
+              "const books = ['b2','b3','b4','b5','b6'];",
+              "const token = pm.environment.get('memberToken');",
+              "const baseUrl = pm.environment.get('baseUrl');",
+              "",
+              "const requests = books.map(bookId => ({",
+              "  url: baseUrl + '/loans',",
+              "  method: 'POST',",
+              "  header: [",
+              "    { key: 'Content-Type', value: 'application/json' },",
+              "    { key: 'Authorization', value: 'Bearer ' + token }",
+              "  ],",
+              "  body: { mode: 'raw', raw: JSON.stringify({ bookId: bookId }) }",
+              "}));",
+              "",
+              "// Execute all pre-loans sequentially",
+              "function borrowBook(index) {",
+              "  if (index >= requests.length) return;",
+              "  pm.sendRequest(requests[index], function (err, res) {",
+              "    borrowBook(index + 1);",
+              "  });",
+              "}",
+              "borrowBook(0);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 422 — Loan limit exceeded', function () {",
+              "  pm.response.to.have.status(422);",
+              "});",
+              "pm.test('RFC 7807 — loan-limit-exceeded detail', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  const p = pm.response.json();",
+              "  pm.expect(p.status).to.eql(422);",
+              "  pm.expect(p.maxLoans).to.eql(5);",
+              "  pm.expect(p.activeLoans).to.be.at.least(5);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{memberToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookId\": \"b1\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/loans", "host": ["{{baseUrl}}"], "path": ["loans"] }
+      }
+    },
+    {
+      "name": "17 — Member-Admin нөөцөд хандах — 403",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 403 Forbidden', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('Problem+json 403', function () {",
+              "  pm.response.to.have.header('Content-Type', 'application/problem+json');",
+              "  pm.expect(pm.response.json().status).to.eql(403);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+        "url": { "raw": "{{baseUrl}}/members", "host": ["{{baseUrl}}"], "path": ["members"] }
+      }
+    },
+    {
+      "name": "18 — Шинэ гишүүн бүртгэх — 201",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "pm.test('Нууц үг хариунд ороогүй', function () {",
+              "  const member = pm.response.json();",
+              "  pm.expect(member).to.have.property('id');",
+              "  pm.expect(member).to.not.have.property('password');",
+              "  pm.expect(member.role).to.eql('member');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Шинэ Гишүүн\",\n  \"email\": \"new-member@library.mn\",\n  \"password\": \"test123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+      }
+    }
+  ]
+}
