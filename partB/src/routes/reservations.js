@@ -2,9 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { db, uuidv4 } = require('../data/store');
 const { authenticate, problem } = require('../middleware/auth');
-const { paginate } = require('../middleware/pagination');
+const { paginate } = require('../middleware/problem');
 
-// GET /reservations
 router.get('/', authenticate, (req, res) => {
   let reservations = req.user.role === 'admin'
     ? db.reservations
@@ -13,7 +12,6 @@ router.get('/', authenticate, (req, res) => {
   res.json(result);
 });
 
-// POST /reservations
 router.post('/', authenticate, (req, res) => {
   const { bookId } = req.body;
   if (!bookId) return problem(res, 400, 'validation-error', 'Validation Error', 'bookId is required');
@@ -45,7 +43,6 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json(reservation);
 });
 
-// DELETE /reservations/:id — cancel
 router.delete('/:id', authenticate, (req, res) => {
   const idx = db.reservations.findIndex(r => r.id === req.params.id);
   if (idx === -1) return problem(res, 404, 'not-found', 'Not Found', `Reservation '${req.params.id}' not found`);
