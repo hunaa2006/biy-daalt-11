@@ -1,40 +1,16 @@
-const express = require('express');
+
+const express = require("express");
 const app = express();
+
+const { auth } = require("./middleware/auth");
 
 app.use(express.json());
 
-// Routes
-app.use('/auth', require('./routes/auth'));
-app.use('/books', require('./routes/books'));
-app.use('/members', require('./routes/members'));
-app.use('/loans', require('./routes/loans'));
-app.use('/reservations', require('./routes/reservations'));
+app.use("/auth", require("./routes/auth"));
+app.use("/books", require("./routes/books"));
+app.use("/loans", auth, require("./routes/loans"));
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).set('Content-Type', 'application/problem+json').json({
-    type: 'https://library.mn/problems/not-found',
-    title: 'Not Found',
-    status: 404,
-    detail: `Route ${req.method} ${req.path} not found`,
-  });
+app.listen(3000, () => {
+  console.log("Server running at http://localhost:3000");
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).set('Content-Type', 'application/problem+json').json({
-    type: 'https://library.mn/problems/internal-error',
-    title: 'Internal Server Error',
-    status: 500,
-    detail: 'An unexpected error occurred',
-  });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Library API running on http://localhost:${PORT}`));
-
-module.exports = app;
